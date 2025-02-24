@@ -4,6 +4,7 @@ from airflow.decorators import task
 from airflow.models import Variable
 from datetime import datetime
 import random
+from airflow.utils.task_group import TaskGroup
 
 # Defininf Airflow variables
 default_warehouse = Variable.get("default_warehouse", default_var="WH001")
@@ -20,10 +21,12 @@ def check_stock():
     print(f"current stock of {default_warehouse} : {current_stock}")
     
     if current_stock >= threshold_stock:
-        return "process_order"
+        #return "process_order"
+        return "order_processing.process_order"
         
     else:
-        return "rejected_order"
+        #return "rejected_order"
+        return "order_processing.reject_order"
         
     
 # Function for order processing
@@ -53,15 +56,28 @@ with DAG(
         python_callable=check_stock,
     )
 
-    process_order_task = PythonOperator(
-        task_id="process_order",
-        python_callable=process_order,
-    )
-
-    reject_order_task = PythonOperator(
+    with TaskGroup(
+        group_id="order_processing"
+    ) as order_processing_group:
+        process_order_task = PythonOperator(
+            task_id="process_order",
+            python_callable=process_order,
+        )
+        
+        reject_order_task = PythonOperator(
         task_id="reject_order",
         python_callable=reject_order,
     )
+        
+    # process_order_task = PythonOperator(
+    #     task_id="process_order",
+    #     python_callable=process_order,
+    # )
+
+    # reject_order_task = PythonOperator(
+    #     task_id="reject_order",
+    #     python_callable=reject_order,
+    # )
     
     check_variables >> check_stock_task
     check_stock_task >> [process_order_task, reject_order_task]
